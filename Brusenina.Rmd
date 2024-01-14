@@ -1,0 +1,215 @@
+---
+title: "Python project Mental Health"
+author: "Maria Brusenina"
+date: "2023-12-11"
+output: html_document
+---
+```{r import_library, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+library(reticulate)
+py_install(packages = "matplotlib")
+```
+
+# What people are more prone to experience anxiety and depression? 
+Nowadays, it is well known that mental health issues exist and people all over the world can face anxiety and depression. So it would be interesting to know what groups are more likely to face mental health issues and at what age people are more likely to experience anxiety.
+
+## Description of the database
+The dataset was taken from [Wellcome Global Monitor (WGM) 2020 Mental Health Module](https://wellcome.org/reports/wellcome-global-monitor-mental-health/2020) that was indicated as a datasource on the site [Our World in Data: Mental Health](https://ourworldindata.org/mental-health).
+The original dataset in the 'full.csv' file contained 58 columns and 119089 observations.
+After removing variables not of interest and cleaning, there are left 18 534 rows and 11 columns :
+
+* **COUNTRYNEW**   - Country name, there are 107 countries in the dataset
+* **Gender** - gender (0 Male, 1 Female)
+* **Age** - age of the person
+* **Education** - Highest level of educational attainment (1 Elementary or less (8 years or less), 2 Secondary (8-15 years), 3 Tertiary (16+ years))
+* **Household_Income**   Per Capita Income Quantiles (1 Poorest 20%, 2 Second 20%, 3 Middle 20%, 4 Fourth 20%, 5 Richest 20%)
+* **wbi** - Country income level - World Bank most recent
+definition	(0 Low income, 1 Lower-middle income, 2 Upper-middle income, 3 High income)
+* **emp** - employment status (0 employed, 1 not employed)
+* **age_anx**     -  age when first felt anxiety        
+* **close_anx**            Friends/Family Have Been Anxious/Depressed (0 Yes, 1 No)
+* **felt_anx**            Have Felt Anxious/Depressed More Than Once (0 Yes, 1 No)
+* **work**  Employment status (0 employed, 1 not employed)
+
+
+```{python dataset, include=FALSE}
+import pandas as pd
+full=pd.read_csv('full.csv')
+
+#Select columns    
+pick=full[['COUNTRYNEW','MH6','MH7B','MH7C','MH8G','Age','Gender','Education','Household_Income','wbi','EMP_2010']]
+
+#Clean rows with no answers (values equal 99 in the original dataset)
+pick_clean = pick[pick.MH6 != 99]
+pick_clean = pick[pick.MH7B != 99]
+pick_clean = pick[pick.MH7C != 99]
+pick_clean = pick[pick.MH8G != 99]
+pick_clean = pick[pick.MH7B != 99]
+#Clean out of workforce (value equals 6 in the original dataset)
+pick_clean = pick[pick.EMP_2010 != 6]
+
+data=pick_clean.dropna()
+
+#Change strings to int
+data['age_anx']=pd.to_numeric(data['MH7B'], errors='coerce')
+data['felt_anx']=pd.to_numeric(data['MH7C'], errors='coerce')
+data['close_anx']=pd.to_numeric(data['MH6'], errors='coerce')
+data['work']=pd.to_numeric(data['MH8G'], errors='coerce')
+data['Household_Income']=pd.to_numeric(data['Household_Income'], errors='coerce')
+data['EMP_2010']=pd.to_numeric(data['EMP_2010'], errors='coerce')
+
+df=data.dropna()
+
+# 0 for Male, 1 for Female (in the original dataset 1 for Male 2 for Female)
+df['Gender']=df['Gender']-1
+
+# 0 Friends/Family Have Been Anxious/Depressed, 1 close have not been Anxious/Depressed (in the original dataset 1 and 2 respectively)
+df['close_anx']=df['close_anx']-1
+
+# 0 Have Felt Anxious/Depressed More Than Once, 1 Have not Felt Anxious/Depressed more than once (in the original dataset 1 and 2 respectively)
+df['felt_anx']=df['felt_anx']-1
+
+# 0 Changed work situation, 1 did not change work situation (in the original dataset 1 and 2 respectively)
+df['work']=df['work']-1
+# 0 Changed wbi
+df['wbi']=df['wbi']-1
+```
+
+
+```{python show, include=FALSE}
+d=df[['COUNTRYNEW', 'Gender','Age', 'Education','Household_Income','wbi','EMP_2010','age_anx','close_anx','felt_anx','work']]
+
+import numpy as np
+# Keep only unemployed (as 1) which is 4 and employed (as 0) which is others
+d['emp']= np.where(d['EMP_2010']==4, '0', '1')
+d['emp']=pd.to_numeric(d['emp'], errors='coerce')
+
+
+d=d[['COUNTRYNEW', 'Gender', 'Age', 'Education','Household_Income','wbi','emp','age_anx','close_anx','felt_anx','work']]
+```
+
+## Questions to research:
+1. What countries have the lowest and highest mean age of first anxiety?
+1. Do men and women experience first anxiety at the same age?
+1. What factors (education, employment status, income and having depressed close ones) impact the age of first anxiety ? 
+
+## Hypothesis
+1. People from countries with higher level of income on average experience first anxiety later than people from countries with low income, because low income countries have more stressful life.
+1. The average age of first anxiety is different for men and women, because there exist gender stereotypes regarding expressing emotions.
+1. I would assume higher household and country income, employment and not having depressed close ones is correlated with higher age of first anxiety. 
+
+
+## Descriptive analysis
+
+#### Top five coutries by lowest average age of first anxiety.
+```{python echo=FALSE}
+d.groupby(['COUNTRYNEW', 'wbi'])['age_anx'].mean().sort_values(ascending=True).head(5)
+```
+
+#### Top five coutries by highest average age of first anxiety.
+```{python echo=FALSE}
+d.groupby(['COUNTRYNEW','wbi'])['age_anx'].mean().sort_values(ascending=False).head(5)
+```
+
+#### Mean age of first anxiety by country's income level. 
+```{python echo=FALSE}
+d.groupby(['wbi'])['age_anx'].mean().sort_values(ascending=False)
+```
+
+#### Most people experience first anxiety in their 20s.
+```{python echo=FALSE}
+import matplotlib.pyplot as plt
+plt.clf()
+plt.hist(d['age_anx'], bins=100)
+plt.show()
+```
+
+#### For men and women the distribution of age of the first anxiety does not change.
+```{python echo=FALSE}
+plt.clf()
+
+plt.hist(d[d['Gender']==0]['age_anx'])
+plt.hist(d[d['Gender']==1]['age_anx'])
+plt.legend()
+plt.show()
+```
+
+#### There are more people who experienced first axiety at their early 20s among unemployed people than among employed.
+
+**Employed**
+```{python employed, echo=FALSE}
+plt.clf()
+plt.hist(d[d['emp']==0]['age_anx'])
+plt.show()
+```
+
+**Not employed**
+```{python unemployed, echo=FALSE}
+plt.clf()
+plt.hist(d[d['emp']==1]['age_anx'])
+plt.show()
+```
+
+## Is average age of first anxiety the same for men and women? 
+
+According to ttest the mean age of first anxiety is different for men and women, but the difference is very small according to Cohen's d test.
+```{python gender_test, echo=FALSE}
+import scipy.stats as stats
+from statistics import mean, stdev
+from math import sqrt
+
+men=d[d['Gender']==0]['age_anx']
+women=d[d['Gender']==1]['age_anx']
+stats.ttest_ind(a=women, b=men,equal_var=True)
+cohens_d = (mean(women) - mean(men)) / (sqrt((stdev(men) ** 2 + stdev(women) ** 2) / 2))
+
+print("Cohen's d: "+str(cohens_d))
+```
+
+Average age of first anxiety by gender
+```{python gender_avg, echo=FALSE}
+yo=d[['age_anx','Gender']].groupby(['Gender']).mean()
+yo
+```
+
+The mean age of first anxiety is a little higher for unemployed than for employed, but still the size effect is rather small.
+```{python emp_test, echo=FALSE}
+import scipy.stats as stats
+from statistics import mean, stdev
+from math import sqrt
+emp=d[d['emp']==0]['age_anx']
+unemp=d[d['emp']==1]['age_anx']
+stats.ttest_ind(a=emp, b=unemp, equal_var=False)
+
+cohens_d = (mean(unemp) - mean(emp)) / (sqrt((stdev(unemp) ** 2 + stdev(emp) ** 2) / 2))
+
+print("Cohen's d: "+str(cohens_d))
+```
+
+Average age of first anxiety by employment status
+```{python emp_avg, echo=FALSE}
+o=d[['age_anx','emp']].groupby(['emp']).mean()
+o
+```
+
+## What factors impact the age of first anxiety ? 
+Linear regression  explains not very well  the relationships between given variables and the age of the first anxiety. Employment and Gender indeed do not impact the age of first anxiety, whereas higher level of education and not having depressed relatives and friends on average postpones first anxiety for 0,11 and 0,09 year respectively .
+```{python ols, echo=FALSE}
+import statsmodels.api as sm
+import pandas as pd
+import numpy as np
+
+
+Y = d['age_anx']
+X = d[['emp', 'Gender', 'Age', 'Education','wbi','Household_Income', 'close_anx']] 
+X = sm.add_constant(X)
+model = sm.OLS(Y,X)
+results = model.fit()
+results.params
+results.summary()
+```
+## Results
+Only some (the last) of the hypothesis turned out to be right.
+
+1. People from countries with higher level of income on average experience first anxiety earlier by almost 2 years.
+1. The average age of first anxiety does not differ significantly for men and women and is not affected by employment status.
+1. Higher household and country income, and not having depressed close ones indeed is correlated with later age of first anxiety. 
