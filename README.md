@@ -5,6 +5,12 @@ Hello, my name is Maria, I am a graduate student of master's in Data Science wit
 In this repository I share my personal and study projects related to Data Analysis.
 
 My CV in [English](https://github.com/marybrus23/Portfolio/blob/main/Maria%20Brusenina%20CV%20ENG.pdf) and in [French](https://github.com/marybrus23/Portfolio/blob/main/Brusenina%20Maria%20CV%20FR.pdf).  
+## Table of contents
+- [About](#about)
+- [Projects](#Projects)
+	+
+- [Contacts](#contacts)
+
 ## Contacts
 * **LinkedIn:** [@maria-brusenina](https://www.linkedin.com/in/maria-brusenina/)
 * **E-mail:** mashabrusenina@gmail.com
