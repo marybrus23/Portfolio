@@ -10,7 +10,7 @@ My CV in [English](https://github.com/marybrus23/Portfolio/blob/main/Maria%20Bru
 - [Projects](#Projects)
 	+ [NYC Yellow Taxi Trips Analysis](#NYC-Yellow-Taxi-Trips-Analysis)
 	+ [Video Games Sales Analysis](#Video-Games-Sales-Analysis)
- 	+ []()
+ 	+ [Mental Health Data Analysis](#Mental-Health-Data-Analysis)
 - [Contacts](#contacts)
 
 ## Projects
@@ -20,7 +20,7 @@ My CV in [English](https://github.com/marybrus23/Portfolio/blob/main/Maria%20Bru
 ### Video Games Sales Analysis
 **Code:** [`Video Games`](https://github.com/marybrus23/Portfolio/blob/main/MondejarTessa_BruseninaMaria.Rmd)    
 **Description:** This work analyses data about taxi trips in New York in January 2023 based on the dataset from the [Official Website of the City of New York](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). The project includes the following steps: data import, data cleaning and EDA (exploratory data analysis).
-### Mental Health 
+### Mental Health Data Analysis
 **Code:** [`Mental Health`](https://github.com/marybrus23/Portfolio/blob/main/MondejarTessa_BruseninaMaria.Rmd)(https://github.com/marybrus23/Portfolio/blob/main/Brusenina.Rmd)    
 **Description:** This work analyses data about mental health based on the dataset provided by the [Welcome Global Monitor 2020](https://wellcome.org/reports/wellcome-global-monitor-mental-health/2020). The project includes the following steps: data import, data cleaning and EDA (exploratory data analysis).
 
