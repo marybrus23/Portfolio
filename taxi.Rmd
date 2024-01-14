@@ -1,0 +1,364 @@
+---
+title: "Project R"
+author: "Maria"
+date: "2023-12-22"
+output: html_document
+---
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(kableExtra)
+library(reshape)
+library(forcats)
+library(arrow)
+```
+
+## What are the characteristics of the Yellow Taxi trips in New York?
+#### This work analyses data about taxi trips in New York based on the dataset provided by [NYC Open Data](https://data.cityofnewyork.us/Transportation/2020-Yellow-Taxi-Trip-Data/kxp8-n2sj) and [The Official Website of the City of New York](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). Each row represents information about a Yellow Taxi trip in New York in January 2023. The original dataset contained 3 million observations and 19 variables. The size of the dataset was too big so it was randomly sampled. After sampling, cleaning and transformating there are **100 000** observations and **9** variables:
+* **tpep_pickup_datetime**  - The date and time when the meter was engaged.
+* **tpep_dropoff_datetime** - The date and time when the meter was disengaged. 
+* **passenger_count** - The number of passengers in the vehicle.       
+* **trip_distance** - The elapsed trip distance in miles reported by the taximeter.      
+* **PULocationID** - TLC Taxi Zone in which the taximeter was engaged        
+* **DOLocationID** - TLC Taxi Zone in which the taximeter was disengaged         
+* **payment_type** - A numeric code signifying how the passenger paid for the trip (1= Credit card, 2= Cash)
+* **tip_amount** - Tip amount (automatically populated for credit card tips. Cash tips are not included)
+* **total_amount** - The total amount charged to passengers. Does not include cash tips.
+
+
+```{r data, include=FALSE}
+#Import dataset
+data <- read_parquet("Datasets/taxi_jan.parquet")
+
+#Remove variables not of interest
+data_f <- data[,-c(1,6, 7, 11, 12, 13,15,16, 18,19)]
+
+#Remove rows with missing values
+dat <- na.omit(data_f)
+```
+
+```{r create var, include=FALSE}
+#Add a variable duration of the trip in minutes as difference between pickup and drop off timestamps 
+dat$duration <- difftime(dat$tpep_dropoff_datetime, dat$tpep_pickup_datetime, units='mins')
+dat$duration <- as.numeric(dat$duration)
+```
+
+```{r hist, include=FALSE}
+#Create histograms of the values to see the outliers to filter out
+tip_hist <- ggplot(dat, aes(x=tip_amount)) + geom_histogram()
+tip_hist
+duration_hist <- ggplot(dat, aes(x=duration)) + geom_histogram()
+duration_hist
+distance_hist <- ggplot(dat, aes(x=trip_distance)) + geom_histogram()
+distance_hist
+total_hist <- ggplot(dat, aes(x=total_amount)) + geom_histogram()
+total_hist
+```
+
+```{r filter, include=FALSE}
+dat1 <- dat  %>% filter(tip_amount<30, duration<80, trip_distance<30, trip_distance>0, total_amount>0, total_amount<200, passenger_count !=0)%>% filter(payment_type ==1 & tip_amount>=0|payment_type == 2 & tip_amount==0)
+
+
+#Choose randomly 100 000 rows from the original dataset
+set.seed(123)
+df <- sample_n(dat1, 100000)
+```
+
+
+### The summary statistics are shown below. We can see that average distance is 3.4 miles, average tip amount is $3.4, average cost of a trip is $27 and average duration of the trip is 14 minutes.
+
+```{r echo=FALSE}
+summary(df[,c(4,8,9,10)])%>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) 
+```
+
+
+## Number of trips
+
+### The number of daily trips throughout the month ranges from 2000 to 3500. There are waves about every 7 days so it might be the weekly pattern.
+
+```{r day, echo=FALSE, message=FALSE, warning=FALSE}
+df$day <- format(as.POSIXct(df$tpep_pickup_datetime), format = "%d")
+day <-ggplot(df, aes(x=day)) + geom_bar(aes(fill=..count..), stat = 'count', show.legend = FALSE)+
+  labs(title="Figure 1: Number of trips per day of the month",
+       y="",
+       x="Day of the month")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')
+day
+```
+
+### Indeed, Thrurdsay, Friday and Saturday are on average busier than other days.
+
+```{r dayofweek, echo=FALSE, message=FALSE, warning=FALSE}
+# Add variable day of week when the ride took place, where 1 is Monday
+df$weekday <- as.factor(wday(df$tpep_pickup_datetime, week_start=1))
+
+#Bar plot average number of trips per day of the week
+tbl0 <- count(df, date=format(as.POSIXct(df$tpep_pickup_datetime), format ='%Y-%m-%d')) %>% mutate(weekday = as.factor(wday(date, week_start=1))) %>% group_by(weekday) %>% summarise_at(vars(n), list(avg_n = mean))
+
+dw <- ggplot(tbl0,aes(x=weekday, y=avg_n))+geom_bar(aes(fill = avg_n), show.legend = FALSE, stat = 'identity')+labs(title="Figure 2: Average number of trips per day of the week (1 is Monday)",
+       y="",
+       x="Day of the week")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')
+
+dw
+```
+
+### Majority of the trips start around 8 am with the number of trips increasing gradually throughout the day with the peak hours at 18-19 o'clock and then decreasing with the lowest traffic at 5-6 am. 
+
+```{r hour, echo=FALSE, message=FALSE, warning=FALSE}
+# Add varibale hour when a ride began
+df$hour <- format(as.POSIXct(df$tpep_pickup_datetime), format = "%H")
+p <- ggplot(df, aes(x=hour)) + geom_bar(show.legend = FALSE,aes(fill=..count..), stat = 'count')+
+  labs(title="Figure 3: Number of trips per pick up hour",
+       y="",
+       x="Hour when the trip started")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='deeppink')
+p
+```
+
+
+## Number of passengers
+### Most of the trips count one passenger.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+psng <- ggplot(df, aes(x=as.factor(passenger_count))) + geom_bar(show.legend = FALSE, aes(fill=..count..))+
+  labs(title="Figure 4: Trips by number of passengers",
+       y="trips",
+       x="Number of passengers in a trip")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')
+psng
+```
+
+
+## Duration
+### The majority of the trips is 10-15 minute long.
+
+```{r min, echo=FALSE, message=FALSE, warning=FALSE}
+#Plot duration histogram
+dur <- ggplot(df, aes(x=duration)) + geom_histogram(show.legend = FALSE, aes(fill=..count..),bins=100)+
+  labs(title="Figure 5: Number of trips by their duration",
+       y="",
+       x="Duration, min")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='deeppink')
+dur
+```
+
+
+### Average duration of the trip does not differ throughout the week and remains around 15 minutes.
+
+```{r avg duration dayweek, echo=FALSE}
+avg_dur <- ggplot(df, aes(x=weekday, y=duration)) + geom_bar(stat = 'summary', fun = 'mean', fill="lightblue")+
+  labs(title="Figure 6: Average duration of a trip per day of the week (1 is Monday)",
+       y="min",
+       x="Day of the week")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())
+avg_dur
+```
+
+### Average duration of the trip is slightly higher at 15-18h.
+
+```{r avg duration starthour, echo=FALSE}
+tbl1 <- df %>% group_by(hour) %>% summarise_at(vars(duration), list(avg_d = mean))
+
+avg_dur_h <- ggplot(tbl1,aes(x=hour, y=avg_d))+geom_bar(aes(fill = avg_d), show.legend = FALSE, stat = 'identity')+
+  labs(title="Figure 7: Average duration of a trip by the hour the trip started",
+       y="Duration, min",
+       x="Hour of the day")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')
+avg_dur_h
+```
+
+
+## Speed
+### Average speed of the trip is higher at night and early in the morning peaking at 6 am and is lowest at rush hours 16-18 o'clock.
+
+```{r avg speed starthour, echo=FALSE, message=FALSE, warning=FALSE}
+#Create column speed in miles per hour
+df$speed <- df$trip_distance*60/df$duration
+
+avg_speed_h <- ggplot(df, aes(x=hour, y=speed, fill=hour)) + geom_bar(stat = 'summary', fun = 'mean')+
+  labs(title="Figure 8: Average speed of a trip thoughout the day",
+       y="min",
+       x="Hour of the day")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),  legend.position="none",  strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_manual(values=c('lightblue','lightblue','lightblue','lightblue','lightblue','deeppink','deeppink','deeppink','lightblue','lightblue','lightblue','lightblue','lightblue','lightblue','lightblue','lightblue','#AB82FF','#AB82FF','#AB82FF','lightblue','lightblue','lightblue','lightblue','lightblue'))
+avg_speed_h
+```
+
+
+### Most of the trips' distance is around 3 miles.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dist <- ggplot(df, aes(x=trip_distance)) + geom_histogram(show.legend = FALSE, aes(fill=..count..))+
+  labs(title="Figure 9: Number of trips by distance",
+       y="",
+       x="Distance, miles")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')
+dist
+```
+
+
+### Average distance of the trips does not differ significantly by number of pasengers.
+
+```{r avg dist count, echo=FALSE}
+avg_dist <- ggplot(df %>% filter(trip_distance<6), aes(x=as.character(passenger_count), y=trip_distance)) + geom_boxplot(fill="slateblue", alpha=0.2)+labs(title="Figure 10: Distance of a trip by number of passengers",
+       y="miles",
+       x="Number of passengers")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())
+avg_dist
+```
+
+
+
+
+## Payment method, tips and total cost 
+### Most of the trips cost less than $25.
+```{r tot, echo=FALSE, message=FALSE, warning=FALSE}
+tot <- ggplot(df %>% filter(total_amount<130), aes(x=total_amount)) + geom_histogram(show.legend = FALSE, bins=300, aes(fill=..count..))+
+  labs(title="Figure 11: Histogram of trips's cost",
+       y="",
+       x="Cost of a trip, dollar")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')+scale_x_continuous(breaks = round(seq(min(df$total_amount), max(df$total_amount), by = 14),0))
+
+tot
+```
+
+### The majority of the trips is paid by credit card (1 Credit Card, 2 Cash).
+
+```{r pay type, echo=FALSE, message=FALSE, warning=FALSE}
+pay <- df %>% group_by(payment_type) %>% summarise(count = n()) %>% arrange(desc(count))%>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) 
+pay
+```
+
+
+### Most of the trips have less than $5 tips.
+
+```{r tip, echo=FALSE, message=FALSE, warning=FALSE}
+tip <- ggplot(df %>% filter(payment_type==1), aes(x=tip_amount)) + geom_histogram(show.legend = FALSE, bins=200, aes(fill=..count..))+
+  labs(title="Figure 12: Histogram of tips amount",
+       y="",
+       x="Dollars")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+scale_fill_gradient(low='skyblue1', high='mediumpurple3')+scale_x_continuous(breaks = round(seq(min(df$tip_amount), max(df$tip_amount), by = 1),1))
+
+tip
+```
+
+
+### People prefer to leave even sums (exactly 2, 1 or 3 dollars).
+
+```{r tip tab, echo=FALSE, message=FALSE, warning=FALSE}
+tip1<- df %>% filter(payment_type==1)%>% group_by(tip_amount) %>% summarise(count = n()) %>% arrange(desc(count)) %>% slice(1:4)%>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) 
+tip1
+```
+
+
+
+### If any tips are left, their amount is positively correlated with the total cost of the trip and its distance.  
+
+```{r dist tips, echo=FALSE, message=FALSE, warning=FALSE}
+l <- ggplot(df %>% filter(tip_amount>0, tip_amount<25, trip_distance>0), aes(x = trip_distance, y = tip_amount)) + geom_point(aes(color = total_amount), alpha=0.5)+  geom_smooth(method='lm', color='#FF34B3')+
+  labs(title="Figure 13: How distance of the trip is related to the amount of tips",
+       y="Tips, dollar",
+       x="Distance, miles")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank())+  scale_color_gradient(low = "cadetblue1", high = "#FF00FF")
+
+
+l
+```
+
+
+### On average the smallest tips (in proportion to the total cost of the trip) are left in the early morning.
+```{r avg tips, echo=FALSE, message=FALSE, warning=FALSE}
+tblh <- df %>%filter(payment_type==1) %>%  group_by(weekday, hour) %>% summarise(tip_perc = mean(tip_amount/total_amount*100))
+
+hm <- ggplot(tblh, aes(weekday, hour, fill= tip_perc)) + geom_tile()+  scale_fill_gradient(low="mediumpurple1", high="skyblue1")+ labs(
+       y="Hour",
+       x="Day of the week")
+
+hm
+```
+
+
+
+## Location
+### Most of the trips take place in Manhattan.
+
+```{r taxi zone, include=FALSE}
+#Left join data about places of pick up and drop off.
+zone = read.csv('Datasets/taxi_zone.csv',sep=';')
+df2 <- left_join(df, zone, by=c('PULocationID'='LocationID'))
+colnames(df2)[c(15, 16,17)] <- paste('PU', colnames(df2)[c(15, 16,17)], sep = '_')
+df3 <- left_join(df2, zone, by=c('DOLocationID'='LocationID'))
+colnames(df3)[c(18, 19,20)] <- paste('DO', colnames(df3)[c(18, 19,20)], sep = '_')
+```
+
+
+```{r pull zone, echo=FALSE, message=FALSE, warning=FALSE}
+top_p <- df3 %>% group_by(PU_Borough) %>% summarise(count = n()) %>% arrange(desc(count))%>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) 
+top_p
+
+top_d <- df3 %>% group_by(DO_Borough) %>% summarise(count = n()) %>% arrange(desc(count))%>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) 
+top_d
+```
+
+```{r export csv, include=FALSE}
+write.csv(df3, "Datasets\\taxi_final.csv", row.names=TRUE)
+```
+
+
+## Conclusion
+#### From the plots it is seen that the busiest time for New York taxi drivers are Thursday, Friday and Saturday at 6-7 p.m. A typical trip takes place inside Manhattan, counts one passenger, is 3 miles long, lasts 10 minutes, costs $15 and is payed by credit card. 
+#### 4-6 p.m. is the slowest time probably because of the traffic. Although, the amount of tips early in the morning is generally smaller than throughout the day, the average speed is faster, so taxi drivers can benefit from doing longer distance trips (which are related to bigger tips) at that time of the day. 
+
+
+
+
+
