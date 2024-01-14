@@ -1,0 +1,283 @@
+---
+title: "Assignment Ggplot"
+author: "Mondejar Tessa, Brusenina Maria"
+date: "2023-11-04"
+output: pdf_document
+---
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(kableExtra)
+library(reshape)
+library(forcats)
+```
+
+# Introduction
+This documents aims at analyzing the sales of video games.
+
+# Presentation of the data
+The dataset was taken from [Kaggle](https://www.kaggle.com/datasets/gregorut/videogamesales) and contains a list of video games realesed between 1980 and 2022 with sales greater than 100 000 copies. 
+
+##### The dataset includes 16 598 records and 11 columns:
+* Rank - Ranking of overall sales
+* Name - Game's name
+* Platform - Platform of the games release (i.e. PC,PS4, etc.)
+* Year - Year of the game's release
+* Genre - Genre of the game
+* Publisher - Publisher of the game
+* NA_Sales - Sales in North America (in millions)
+* EU_Sales - Sales in Europe (in millions)
+* JP_Sales - Sales in Japan (in millions)
+* Other_Sales - Sales in the rest of the world (in millions)
+* Global_Sales - Total worldwide sales (in millions)
+
+In the data there were missing values for games released after 2016, so the data set was filtered to show games released in 2016 or before. Other rows with missing data were removed too. The columns with sales were renamed by removing '_Sales'. 
+
+```{r clean_data, echo=FALSE, warning=FALSE}
+
+# Import file
+vg <- read.csv("vgsales.csv")
+
+# Change Year type to numeric
+vg$Year <- as.numeric(vg$Year)
+
+#Remove rows with missing values (271 rows were removed)
+vg <- na.omit(vg)
+
+# Rename Region Sales columns and replace mistype 'Misc' with 'Music'
+for ( col in 1:ncol(vg)){
+  colnames(vg)[col] <-  sub("_.*", "", colnames(vg)[col])
+}
+
+names(vg)[names(vg) == 'NA'] <- 'NAm'
+
+vg$Genre[vg$Genre == "Misc"] <- "Music"    
+
+# Filter Years before 2016 because no data
+vg <- vg %>% filter(Year<=2016)
+
+#Creating Unpivot table vgm with Sales for each Region
+vgm <- melt(vg, id.vars=c('Rank', 'Name', 'Platform', 'Year', 'Genre', 'Publisher'), 
+            variable_name="Region")
+
+names(vgm)[names(vgm) == 'value'] <- 'Sales'
+```
+
+##### After cleaning there are left 16 323 records.
+The table below shows the first 5 rows of the cleaned data set.
+
+```{r first_rows, out.width="70%",echo=FALSE, warning=FALSE}
+vg[1:5,] %>% kbl()%>% kable_classic(full_width=F, html_font = "Cambria") %>% 
+  kable_styling(latex_options = c("hold_position","scale_down")) %>%
+  row_spec(0,bold= TRUE) %>%
+  column_spec(1,italic = TRUE) %>%
+  column_spec(column = 6, bold=TRUE)
+```
+
+As we can see from the first lines of our dataset, Nintendo seems to be an interesting case to study in this analysis. We will now deep dive into the top 10 games worldwide.
+
+# Top Games
+**Figure 1** shows top 10 games by global sales.
+Among numerous video games companies Nintendo is the undoubted leader having  released all of the 10 best selling games.
+
+```{r top_games, echo=FALSE, warning=FALSE}
+top_sales <- head(vg, 10)
+ 
+top_sales_g <- ggplot(top_sales, aes(y=reorder(Name, Global), x=Global, fill=Publisher))+
+  geom_bar(stat = 'summary', fun = 'sum')+
+  ggtitle("Global Sales, million")+
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text=element_text(size=10))+
+  geom_text(aes(label = Year), position = position_stack(vjust = 0.5), color ='white', size=3)+
+  labs(title="Figure 1: Top 10 Games with biggest Global Sales",
+       caption = "Data : Kaggle - Video Games Sales",
+       y=" ",
+       subtitle="Global Sales, million of copies",
+       x="",
+       fill = " ")+
+  theme_minimal()+
+  theme(legend.position = "right", 
+        panel.grid.major.y = element_blank(),
+            axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
+    axis.title.x = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5, face = "italic"))
+ 
+top_sales_g
+```
+Nonetheless, we wanted to understand a bit better the environment of games publisher so we searched for the 10 best.
+
+# Top Publishers
+**Figure 2** shows top 10 video games publishers by global sales.
+The 3 biggest players on the video games market are Nintendo, Electronic Arts and Activision.
+
+```{r top_publishers, echo=FALSE, warning = FALSE}
+publisher <- vg %>% group_by(Publisher) %>%
+  summarise(sumGlobal = sum(Global)) %>% 
+  arrange(desc(sumGlobal))%>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(Publisher, sumGlobal), y = sumGlobal, fill = Publisher)) +
+  geom_bar(stat = "identity", show.legend = FALSE)+
+  coord_flip()+
+  labs(title="Figure 2: Top 10 Publishers",
+       subtitle = "Global Sales, million of copies",
+       caption = "Data : Kaggle - Video Games Sales",
+       y="",
+       x=" ")+
+  theme_minimal()+ 
+  theme(panel.grid.major.y = element_blank(),
+        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
+    axis.title.x = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5, face = "italic"))
+
+ 
+publisher
+```
+Now that we know the leaders, we looked at the number of games released through time.
+
+# Top Year
+**Figure 3** shows that from 1980 the number of games released grew gradually, peaked in 2009 at 1431 million and then decreased to 344 million in 2016. 
+
+```{r count_games , echo=FALSE}
+n<- ggplot(vg %>% group_by(Year) %>%summarise(count = n()), aes(x = Year, y = count)) +
+  geom_line()+
+  labs(title="Figure 3: The year with the biggest number of best seling games was 2009",
+      subtitle = "Number of games released",
+       caption = "Data : Kaggle - Video Games Sales",
+       y="",
+       x=" ")+
+  scale_x_continuous(breaks = seq(1980, 2020, 5))+
+  theme(
+    axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
+    axis.title.x = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.grid.major.y = element_line(color = "grey"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5, face = "italic")
+  )
+n
+```
+Then we gave more depth to the research by comparing Nintendo’s number of releases to those of its competitors. **Figure 4** shows the number of games released each year by top publishers Nintendo, Electronic Arts and Activision. It is interesting to notice that Electronic Arts and Activision followed the general trend with highest number of releases being around 2009, whereas Nintendo in general released significantly fewer games than its competitors with the peak in around 2004. As we previously saw, although Nintendo released fewer games it got bigger sales. We can assume that maybe Nintendo relied more on the quality of its games rather than quantity. 
+
+
+```{r nintendo, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+ 
+Nintendo_p <- ggplot(vg %>% filter(Publisher %in% list('Nintendo', 'Activision', 'Electronic Arts')) %>% group_by(Year, Publisher) %>% summarise(count = n()), aes(x = Year, y = count)) +
+  geom_line(aes(color=Publisher))+
+  labs(title="Figure 4: After 1995 Nintendo released fewer games than its competitors",
+      subtitle = "Number of games released by publisher through time",
+       caption = "Data : Kaggle - Video Games Sales",
+       y="Global sales",
+       x=" ",
+      color = " ")+
+  scale_x_continuous(breaks = seq(1980, 2020, 5))+
+  theme(legend.position = "bottom",
+    axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
+    axis.title.x = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.grid.major.y = element_line(color = "grey"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.subtitle = element_text(hjust = 0.5, face = "italic")
+  )
+Nintendo_p
+```
+
+# Top Genres
+Then we needed to find which genres are mostly chosen. **Figure 5** shows that most the genres with the most sales globally were Action, Sports and Shooter. 
+
+
+```{r 5_genre, echo=FALSE, warning = FALSE}
+
+genre_top <- vg %>%
+  group_by(Genre) %>%
+  summarise(sumGlobal = sum(Global)) %>%
+  arrange(desc(sumGlobal)) %>%
+  slice(1:5) %>%
+ mutate(rank = row_number()) %>%
+  ggplot(aes(x = fct_reorder(Genre, -sumGlobal), y = sumGlobal, fill = Genre)) +
+  scale_fill_brewer(palette = "Set3") +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = rank), position = position_dodge(width = 2), vjust = 1.3, color = "gray30")+
+  labs(title = "Figure 5: Action is the most popular genre of games worldwide",
+       subtitle = "Global Sales by Genres, million of copies",
+       caption = "Data: Kaggle - Video Games Sales",
+       y = " ",
+       x = "  ")+
+  theme(
+    axis.ticks.x=element_blank(),
+    axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
+    axis.title.x = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    panel.grid.major.y = element_line(color = "grey"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5, face = "italic")
+  )
+genre_top
+```
+
+It would be also interesting to see whether the preferences for genres are different in regions.
+
+# Genre Preferences by Region
+By taking a look at the top 10 games in different region it is possible to notice that the most popular games in Europe are almost the same as the ones in North America, whereas Japan list of top games is not alike and is led by Pokemon games.
+```{r genre_region, echo=FALSE, warning=FALSE}
+vg_na <-  vg[order(vg$NAm,decreasing=TRUE),]
+top_na <- head(vg_na, 10)
+ 
+vg_eu <-  vg[order(vg$EU,decreasing=TRUE),]
+top_eu <- head(vg_eu, 10)
+vg_jp <-  vg[order(vg$JP,decreasing=TRUE),]
+top_jp <- head(vg_jp, 10)
+top_10_Region <- data.frame(Rank=c(1:10), 
+                             North_America=top_na$Name, 
+                             Europe=top_eu$Name, 
+                             Japan=top_jp$Name)
+
+top_10_Region %>% kbl()%>%
+  kable_classic_2(full_width=F, html_font = "Cambria") %>% 
+   row_spec(0,bold= TRUE) %>% 
+  kable_styling(latex_options = c("hold_position","scale_down"))
+```
+
+As we saw major differences between Europe, North America and Japan we thought it would be interesting to see what genres were most popular throughout time. **Figure 6** shows how changed the structure of sales by genres in different regions.
+The trends of video games in North America and Europe are alike. Platform and Puzzle games were the most popular in the 1980s and 1990s and then were replaced by Shooter, Action and Sports in the 2000s and 2010s. Whereas Japan has different pattern with Role-playing genre keeping its popularity through the years and Sports steadily losing the favor of the players. 
+
+```{r, facet with genre by region per percentage, echo=FALSE, warning = FALSE}
+genre_y1 <- ggplot(vgm %>% filter(Region!='Global' & Year<=2016), 
+                   aes(x=Year, y=Sales, fill=Genre))+
+  geom_bar(stat = 'summary', fun = 'sum', position='fill')+
+  ggtitle("Genres through Years by Region")+
+  facet_wrap(~Region)+
+  scale_fill_brewer(palette = "Paired")+
+   labs(title="Figure 6: Structure of annual Sales by Genre in Regions",
+       caption = "Data : Kaggle - Video Games Sales",
+       y="Proportion of sales",
+       x=" ",
+       color= "",
+       alpha= " ")+
+  theme(panel.grid = element_blank(),
+        legend.position = "right")
+ 
+genre_y1
+```
