@@ -11,6 +11,10 @@ My CV in [English](https://github.com/marybrus23/Portfolio/blob/main/Maria%20Bru
 	+
 - [Contacts](#contacts)
 
+## Projects
+### NYC Yellow Taxi Trips Analysis
+**Code:** [``]()    
+**Description:** This work analyses data about taxi trips in New York in January 2023 based on the dataset from the [Official Website of the City of New York](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). The project includes the following steps: data import, data cleaning and EDA (exploratory data analysis).   
 ## Contacts
 * **LinkedIn:** [@maria-brusenina](https://www.linkedin.com/in/maria-brusenina/)
 * **E-mail:** mashabrusenina@gmail.com
